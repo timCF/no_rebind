@@ -12,8 +12,8 @@ defmodule NoRebind do
       |> Macro.Env.vars()
       |> Enum.map(fn {x, _} -> x end)
       |> MapSet.new()
-      |> traverse_header(header)
-      |> traverse_body(body)
+      |> traverse_header(header |> Macro.expand(__CALLER__))
+      |> traverse_body(body |> Macro.expand(__CALLER__))
 
     quote do
       Kernel.def(unquote(header), do: unquote(body))
@@ -26,9 +26,17 @@ defmodule NoRebind do
     |> merge_vars(vars, ast)
   end
 
-  defp traverse_body(%MapSet{} = vars, _) do
+  defp traverse_body(%MapSet{} = vars, raw_ast) do
+    {^raw_ast, %MapSet{} = ^vars} =
+      raw_ast
+      |> Macro.prewalk(vars, fn
+        ast, %MapSet{} = acc ->
+          ast |> IO.inspect()
+          {ast, acc}
+      end)
+
     #
-    # TODO
+    # TODO : implement!!
     #
     vars
   end
