@@ -12,7 +12,7 @@ defmodule NoRebind do
       |> Macro.Env.vars()
       |> Enum.map(fn {x, _} -> x end)
       |> MapSet.new()
-      |> traverse_header(header |> Macro.expand(__CALLER__))
+      |> extract_and_merge_vars(header |> Macro.expand(__CALLER__))
       |> traverse_body(body |> Macro.expand(__CALLER__))
 
     quote do
@@ -20,31 +20,50 @@ defmodule NoRebind do
     end
   end
 
-  defp traverse_header(%MapSet{} = vars, ast) do
-    ast
-    |> extract_vars()
-    |> merge_vars(vars, ast)
-  end
-
   defp traverse_body(%MapSet{} = vars, raw_ast) do
-    {^raw_ast, %MapSet{} = ^vars} =
+    {_, %MapSet{} = new_vars} =
       raw_ast
-      |> Macro.prewalk(vars, fn
+      |> Macro.postwalk(vars, fn
+        {:=, _, [lhs, rhs]}, %MapSet{} = acc ->
+          {
+            # eliminate all AST node
+            # because full expression (lhs and rhs)
+            # is handled explicitly
+            nil,
+            acc
+            # lhs can contain only patterns, not function calls
+            |> extract_and_merge_vars(lhs)
+            # rhs can contain any expression
+            |> traverse_body(rhs)
+          }
+
         ast, %MapSet{} = acc ->
-          ast |> IO.inspect()
-          {ast, acc}
+          {
+            ast,
+            acc
+          }
       end)
 
     #
     # TODO : implement!!
     #
-    vars
+    new_vars
+  end
+
+  defp extract_and_merge_vars(%MapSet{} = vars, ast) do
+    ast
+    |> extract_vars()
+    |> merge_vars(vars, ast)
   end
 
   defp extract_vars(raw_ast) do
     {^raw_ast, %MapSet{} = vars} =
       raw_ast
-      |> Macro.prewalk(MapSet.new(), fn
+      |> Macro.postwalk(MapSet.new(), fn
+        {v, _, c} = ast, %MapSet{} = acc
+        when v in [:__CALLER__, :__DIR__, :__ENV__, :__MODULE__, :__STACKTRACE__] and is_atom(c) ->
+          {ast, acc}
+
         {v, _, c} = ast, %MapSet{} = acc when is_atom(v) and is_atom(c) ->
           {ast, MapSet.put(acc, v)}
 
