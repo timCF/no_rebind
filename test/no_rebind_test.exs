@@ -25,33 +25,39 @@ defmodule NoRebindTest do
   end
 
   test "success with bindings", %{module: module, other_module: other_module} do
-    quote do
-      defmodule unquote(other_module) do
-        defstruct [:bar]
-      end
+    compiled =
+      quote do
+        defmodule unquote(other_module) do
+          defstruct [:bar]
+        end
 
-      defmodule unquote(module) do
-        defstruct [:foo]
+        defmodule unquote(module) do
+          defstruct [:foo]
 
-        def foo(x) do
-          %__MODULE__{
-            foo:
-              %unquote(other_module){
-                bar: z
-              } = y
-          } =
+          def foo(x) do
             %__MODULE__{
-              foo: yy
-            } = x
+              foo:
+                %unquote(other_module){
+                  bar: z
+                } = y
+            } =
+              %__MODULE__{
+                foo: yy
+              } = x
 
-          %unquote(other_module){
-            bar: zz
-          } = yy
+            %unquote(other_module){
+              bar: zz
+            } = yy
 
-          zz
+            zz
+          end
         end
       end
-    end
-    |> Code.compile_quoted()
+      |> Code.compile_quoted()
+
+    assert [
+             {^other_module, <<_::binary>>},
+             {^module, <<_::binary>>}
+           ] = compiled
   end
 end
