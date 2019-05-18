@@ -29,14 +29,11 @@ defmodule NoRebind do
     {_, %MapSet{} = new_vars} =
       raw_ast
       |> Macro.prewalk(vars, fn
-        {:=, _, [lhs, rhs]} = ast, %MapSet{} = acc ->
+        {assignment, _, [lhs, rhs]} = debug_ast, %MapSet{} = acc when assignment in [:=, :<-] ->
           {
-            # eliminate this AST node
-            # because full expression (lhs and rhs)
-            # was handled explicitly
             nil,
             acc
-            |> extract_and_merge_vars(lhs, ast)
+            |> extract_and_merge_vars(lhs, debug_ast)
             |> traverse_expression(rhs)
           }
 
@@ -48,11 +45,22 @@ defmodule NoRebind do
             end)
 
           {
-            # eliminate this AST node
-            # because full expression (function with clauses)
-            # is handled explicitly
             nil,
             acc
+          }
+
+        {:case, _, [exp, [do: [_ | _] = clauses]]}, %MapSet{} = acc ->
+          %MapSet{} = new_acc = traverse_expression(acc, exp)
+
+          :ok =
+            clauses
+            |> Enum.each(fn {:->, _, [header, body]} ->
+              traverse_clause(acc, header, body)
+            end)
+
+          {
+            nil,
+            new_acc
           }
 
         ast, %MapSet{} = acc ->

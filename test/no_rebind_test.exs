@@ -7,7 +7,8 @@ defmodule NoRebindTest do
   setup do
     %{
       module: Factory.new_module(),
-      other_module: Factory.new_module()
+      other_module: Factory.new_module(),
+      function: Factory.new_function()
     }
   end
 
@@ -77,4 +78,60 @@ defmodule NoRebindTest do
     end
     |> Code.compile_quoted()
   end
+
+  # comprehensions success
+  [
+    quote do
+      for n <- [1, 2, 3, 4], do: n * n
+    end,
+    quote do
+      for n <- 1..4, do: n * n
+    end,
+    quote do
+      values = [good: 1, good: 2, bad: 3, good: 4]
+      for {:good, n} <- values, do: n * n
+    end,
+    quote do
+      multiple_of_3? = fn n -> rem(n, 3) == 0 end
+      for n <- 0..5, multiple_of_3?.(n), do: n * n
+    end,
+    quote do
+      for i <- [:a, :b, :c], j <- [1, 2], do: {i, j}
+    end,
+    quote do
+      pixels = <<213, 45, 132, 64, 76, 32, 76, 0, 0, 234, 32, 15>>
+      for <<r::8, g::8, b::8 <- pixels>>, do: {r, g, b}
+    end,
+    quote do
+      for <<c <- " hello world ">>, c != ?\s, into: "", do: <<c>>
+    end,
+    quote do
+      for {key, val} <- %{"a" => 1, "b" => 2}, into: %{}, do: {key, val * val}
+    end,
+    quote do
+      stream = IO.stream(:stdio, :line)
+
+      for line <- stream, into: stream do
+        String.upcase(line) <> "\n"
+      end
+    end
+  ]
+  |> Enum.with_index()
+  |> Enum.each(fn {exp, index} ->
+    test "comperhensoins success #{index}", %{module: module, function: function} do
+      exp_ast = unquote(exp |> Macro.escape())
+
+      compiled =
+        quote do
+          defmodule unquote(module) do
+            def unquote(function)() do
+              unquote(exp_ast)
+            end
+          end
+        end
+        |> Code.compile_quoted()
+
+      assert [{^module, <<_::binary>>}] = compiled
+    end
+  end)
 end
