@@ -60,4 +60,21 @@ defmodule NoRebindTest do
              {^module, <<_::binary>>}
            ] = compiled
   end
+
+  test "fn -> success", %{module: module} do
+    quote do
+      defmodule unquote(module) do
+        def foo(lst) do
+          Enum.reduce(lst, "", fn
+            x, acc when is_integer(x) ->
+              "#{acc}#{x}"
+
+            x, acc when is_float(x) ->
+              "#{acc}#{Float.round(x)}"
+          end)
+        end
+      end
+    end
+    |> Code.compile_quoted()
+  end
 end
