@@ -1,15 +1,6 @@
 defmodule NoRebindTest do
-  use ExUnit.Case
-  alias NoRebind.Test.Support.Factory
+  use NoRebind.Test.Case
   doctest NoRebind
-
-  setup do
-    %{
-      module: Factory.new_module(),
-      other_module: Factory.new_module(),
-      function: Factory.new_function()
-    }
-  end
 
   test "success simple", %{module: module} do
     compiled =
@@ -27,7 +18,9 @@ defmodule NoRebindTest do
     assert [{^module, <<_::binary>>}] = compiled
   end
 
-  test "success with bindings", %{module: module, other_module: other_module} do
+  test "success with bindings", %{module: module} do
+    other_module = Factory.new_module()
+
     compiled =
       quote do
         require NoRebind

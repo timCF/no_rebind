@@ -20,7 +20,7 @@ defmodule NoRebind do
     {_, %MapSet{} = new_vars} =
       raw_ast
       |> Macro.prewalk(vars, fn
-        {mid, _, ast} = debug_ast, %MapSet{} = acc
+        {mid, _, [_ | _] = ast} = debug_ast, %MapSet{} = acc
         when mid in [:=, :<-] ->
           [lhs, rhs] = ast
 
