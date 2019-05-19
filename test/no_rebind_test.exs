@@ -1,6 +1,5 @@
 defmodule NoRebindTest do
   use ExUnit.Case
-  use NoRebind
   alias NoRebind.Test.Support.Factory
   doctest NoRebind
 
@@ -15,10 +14,13 @@ defmodule NoRebindTest do
   test "success simple", %{module: module} do
     compiled =
       quote do
+        require NoRebind
+
         defmodule unquote(module) do
           def fac(0), do: 1
           def fac(x) when x > 0, do: x * fac(x - 1)
         end
+        |> NoRebind.apply()
       end
       |> Code.compile_quoted()
 
@@ -28,9 +30,12 @@ defmodule NoRebindTest do
   test "success with bindings", %{module: module, other_module: other_module} do
     compiled =
       quote do
+        require NoRebind
+
         defmodule unquote(other_module) do
           defstruct [:bar]
         end
+        |> NoRebind.apply()
 
         defmodule unquote(module) do
           defstruct [:foo]
@@ -53,6 +58,7 @@ defmodule NoRebindTest do
             zz
           end
         end
+        |> NoRebind.apply()
       end
       |> Code.compile_quoted()
 
@@ -64,6 +70,8 @@ defmodule NoRebindTest do
 
   test "fn -> success", %{module: module} do
     quote do
+      require NoRebind
+
       defmodule unquote(module) do
         def foo(lst) do
           Enum.reduce(lst, "", fn
@@ -75,6 +83,7 @@ defmodule NoRebindTest do
           end)
         end
       end
+      |> NoRebind.apply()
     end
     |> Code.compile_quoted()
   end
@@ -123,11 +132,14 @@ defmodule NoRebindTest do
 
       compiled =
         quote do
+          require NoRebind
+
           defmodule unquote(module) do
             def unquote(function)() do
               unquote(exp_ast)
             end
           end
+          |> NoRebind.apply()
         end
         |> Code.compile_quoted()
 

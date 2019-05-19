@@ -1,22 +1,13 @@
 defmodule NoRebind do
-  defmacro __using__(_) do
-    quote do
-      import Kernel, except: [def: 2]
-      import unquote(__MODULE__), only: [def: 2]
-    end
-  end
-
-  defmacro def(header, do: body) do
+  defmacro apply(ast) do
     %MapSet{} =
       __CALLER__
       |> Macro.Env.vars()
       |> Enum.map(fn {x, _} -> x end)
       |> MapSet.new()
-      |> traverse_clause(header, body)
+      |> traverse_expression(ast)
 
-    quote do
-      Kernel.def(unquote(header), do: unquote(body))
-    end
+    ast
   end
 
   defp traverse_clause(%MapSet{} = vars, header, body) do
@@ -29,7 +20,17 @@ defmodule NoRebind do
     {_, %MapSet{} = new_vars} =
       raw_ast
       |> Macro.prewalk(vars, fn
-        {assignment, _, [lhs, rhs]} = debug_ast, %MapSet{} = acc when assignment in [:=, :<-] ->
+        {defs, _, [header, [do: body]]}, %MapSet{} = acc
+        when defs in [:def, :defp, :defmacro, :defmacrop] ->
+          %MapSet{} = traverse_clause(acc, header, body)
+
+          {
+            nil,
+            acc
+          }
+
+        {mid, _, [lhs, rhs]} = debug_ast, %MapSet{} = acc
+        when mid in [:=, :<-] ->
           {
             nil,
             acc
@@ -83,9 +84,12 @@ defmodule NoRebind do
   end
 
   defp extract_vars(raw_ast) do
-    {^raw_ast, %MapSet{} = vars} =
+    {_, %MapSet{} = vars} =
       raw_ast
       |> Macro.prewalk(MapSet.new(), fn
+        {:^, _, [{v, _, c}]}, %MapSet{} = acc when is_atom(v) and is_atom(c) ->
+          {nil, acc}
+
         {v, _, c} = ast, %MapSet{} = acc
         when v in [:__CALLER__, :__DIR__, :__ENV__, :__MODULE__, :__STACKTRACE__] and is_atom(c) ->
           {ast, acc}
@@ -115,7 +119,10 @@ defmodule NoRebind do
         %NoRebind.Exception{
           message: """
           Definition(s) of #{
-            vars_intersection |> MapSet.to_list() |> Enum.map(&"'#{&1}'") |> Enum.join(", ")
+            vars_intersection
+            |> MapSet.to_list()
+            |> Enum.map(&"'#{&1}'")
+            |> Enum.join(", ")
           } already exist, but was redefined in
 
             #{debug_ast |> Macro.to_string()}
