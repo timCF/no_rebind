@@ -81,6 +81,8 @@ defmodule NoRebindTest do
             x, acc when is_float(x) ->
               "#{acc}#{Float.round(x)}"
           end)
+          |> String.to_charlist()
+          |> Enum.map(fn x -> x + 1 end)
         end
       end
       |> NoRebind.apply()

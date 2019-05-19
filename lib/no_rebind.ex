@@ -20,17 +20,10 @@ defmodule NoRebind do
     {_, %MapSet{} = new_vars} =
       raw_ast
       |> Macro.prewalk(vars, fn
-        {defs, _, [header, [do: body]]}, %MapSet{} = acc
-        when defs in [:def, :defp, :defmacro, :defmacrop] ->
-          %MapSet{} = traverse_clause(acc, header, body)
-
-          {
-            nil,
-            acc
-          }
-
-        {mid, _, [lhs, rhs]} = debug_ast, %MapSet{} = acc
+        {mid, _, ast} = debug_ast, %MapSet{} = acc
         when mid in [:=, :<-] ->
+          [lhs, rhs] = ast
+
           {
             nil,
             acc
@@ -38,30 +31,14 @@ defmodule NoRebind do
             |> traverse_expression(rhs)
           }
 
-        {:fn, _, [_ | _] = clauses}, %MapSet{} = acc ->
-          :ok =
-            clauses
-            |> Enum.each(fn {:->, _, [header, body]} ->
-              traverse_clause(acc, header, body)
-            end)
+        {defs, _, ast}, %MapSet{} = acc
+        when defs in [:def, :defp, :defmacro, :defmacrop, :->] ->
+          [header, body] = ast
+          %MapSet{} = traverse_clause(acc, header, body)
 
           {
             nil,
             acc
-          }
-
-        {:case, _, [exp, [do: [_ | _] = clauses]]}, %MapSet{} = acc ->
-          %MapSet{} = new_acc = traverse_expression(acc, exp)
-
-          :ok =
-            clauses
-            |> Enum.each(fn {:->, _, [header, body]} ->
-              traverse_clause(acc, header, body)
-            end)
-
-          {
-            nil,
-            new_acc
           }
 
         ast, %MapSet{} = acc ->
